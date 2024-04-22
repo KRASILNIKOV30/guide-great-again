@@ -1,12 +1,12 @@
 import Map from 'ol/Map'
-import TileLayer from "ol/layer/Tile";
-import {OSM} from "ol/source";
-import {defaults as defaultControls} from "ol/control";
-import {defaults as defaultInteractions} from "ol/interaction";
-import View from 'ol/View';
+import TileLayer from 'ol/layer/Tile'
+import {OSM} from 'ol/source'
+import {defaults as defaultControls} from 'ol/control'
+import {defaults as defaultInteractions} from 'ol/interaction'
+import View from 'ol/View'
 
 const map = new Map({
-    target: "map",
+    target: 'map',
     layers: [
         new TileLayer({
             visible: true,
@@ -19,8 +19,8 @@ const map = new Map({
     }),
     controls: defaultControls(),
     interactions: defaultInteractions({})
-});
+})
 
 export {
-    map,
+    map
 }
