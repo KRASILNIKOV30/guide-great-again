@@ -2,66 +2,88 @@ import {Coordinate} from 'ol/coordinate';
 import VectorSource from 'ol/source/Vector';
 import {Feature} from 'ol';
 import {Circle, Point} from 'ol/geom';
-import {colors, remapColorToSpeed} from "../core/remap";
+import {areBiomsEquals, Biom, remapColorToSpeed} from "../core/remap";
+import {forEachReverse} from "../core/forEachReverse";
 
 const BETWEEN_POINTS = 50
-const RADIUS_INCREASE = 10
+const RADIUS_INCREASE = 1
 const DRAWING_ENABLED = true
 const SPREAD_ANGLE = Math.PI / 3
 
-type SourceProps = {
-    vectorSource: VectorSource,
-    center: Coordinate,
-    getData: (point: Coordinate) => Uint8ClampedArray,
-    onAnotherBiomReached: (point: Coordinate) => void,
+class Source {
+    circle: Circle
     parentCenter?: Coordinate
-}
+    vectorSource: VectorSource
+    getData: (point: Coordinate) => Uint8ClampedArray
+    onAnotherBiomReached: (point: Coordinate) => void
+    points: Point[] = []
+    biom: Biom;
 
-const Source = {
-    create: (props: SourceProps) => {
-        const {
-            vectorSource,
-            center,
-            getData,
-            onAnotherBiomReached,
-            parentCenter
-        } = props
-        const circle = createCircle(vectorSource, center)
+    constructor(
+        vectorSource: VectorSource,
+        center: Coordinate,
+        getData: (point: Coordinate) => Uint8ClampedArray,
+        onAnotherBiomReached: (point: Coordinate) => void,
+        parentCenter?: Coordinate
+    ) {
+        this.getData = getData
+        this.parentCenter = parentCenter
+        this.vectorSource = vectorSource
+        this.onAnotherBiomReached = onAnotherBiomReached
+        this.circle = this.createCircle(center)
+        this.points = this.addPoints()
+        this.biom = this.getData(this.circle.getCenter())
+    }
 
-        return () => {
-            vectorSource.clear()
-            increaseCircle(vectorSource, circle, getData, onAnotherBiomReached, parentCenter)
-        }
+    createCircle(center: Coordinate) {
+        const feature = new Feature({
+            geometry: new Circle(center, 1)
+        })
+
+        this.vectorSource.addFeature(feature)
+
+        return feature.getGeometry()!
+    }
+
+    addPoints() {
+        const pointsNumber = !!this.parentCenter ? 5 : 10
+
+        const [start, end] = this.parentCenter
+            ? getAngleToSpread(this.parentCenter, this.circle.getCenter())
+            : [0, 2 * Math.PI]
+
+        return Array.from(Array(pointsNumber).keys()).map(i => {
+            const point = new Point(getPoint(this.circle.getCenter(), this.circle.getRadius(), getAngle(start, end, i, pointsNumber)))
+            if (DRAWING_ENABLED) {
+                this.vectorSource.addFeature(
+                    new Feature({
+                        geometry: point
+                    })
+                )
+            }
+            return point
+        })
+    }
+
+    increase() {
+        this.circle.setRadius(this.circle.getRadius() + RADIUS_INCREASE)
+
+        forEachReverse(this.points, (point, i, points) => {
+            movePoint(point, this.circle.getCenter(), RADIUS_INCREASE)
+            const coords = point.getCoordinates()
+            const biom = this.getData(coords)
+            if (remapColorToSpeed(biom) !== null && !areBiomsEquals(this.getData(coords), this.biom)) {
+                this.onAnotherBiomReached(coords)
+                points.splice(i, 1)
+            }
+        })
     }
 }
 
-const createCircle = (vectorSource: VectorSource, center: Coordinate) => {
-    const feature = new Feature({
-        geometry: new Circle(center, 0)
-    })
-
-    return feature.getGeometry()!
-}
-
-const increaseCircle = (
-    vectorSource: VectorSource,
-    circle: Circle,
-    getData: (point: Coordinate) => Uint8ClampedArray,
-    onAnotherBiomReached: (point: Coordinate) => void,
-    parentCenter?: Coordinate,
-) => {
-    addCircle(vectorSource, increase(circle), parentCenter).forEach(point => {
-        const centerSpeed = remapColorToSpeed(getData(circle.getCenter())) ?? colors.scrub
-        const speed = remapColorToSpeed(getData(point))
-        if (speed !== null && centerSpeed !== speed) {
-            onAnotherBiomReached(point)
-        }
-    })
-}
-
-const increase = (circle: Circle) => {
-    circle.setRadius(circle.getRadius() + RADIUS_INCREASE)
-    return circle
+const movePoint = (point: Point, center: Coordinate, speed: number) => {
+    const [x, y] = point.getCoordinates()
+    const angle = Math.atan2(y - center[1], x - center[0]) + 2 * Math.PI
+    point.setCoordinates([x + speed * Math.cos(angle), y + speed * Math.sin(angle)])
 }
 
 const getAngleToSpread = (parent: Coordinate, current: Coordinate) => {
@@ -77,44 +99,13 @@ const getAngle = (start: number, end: number, i: number, n: number) => {
     return start + (end - start) * i / n
 }
 
-const addPoints = (vectorSource: VectorSource, circle: Circle, parentCenter?: Coordinate) => {
-    const pointsNumber = getPointsNumber(circle.getRadius(), !parentCenter)
-
-    const [start, end] = parentCenter
-        ? getAngleToSpread(parentCenter, circle.getCenter())
-        : [0, 2 * Math.PI]
-
-    const points = Array.from(Array(pointsNumber).keys()).map(i => (
-        getPoint(circle.getCenter(), circle.getRadius(), getAngle(start, end, i, pointsNumber))
-    ))
-    if (DRAWING_ENABLED) {
-        points.forEach(point => {
-            vectorSource.addFeature(new Feature({
-                geometry: new Point(point),
-                circle,
-            }))
-        })
-    }
-
-    return points
-}
-
 const getPoint = ([x, y]: Coordinate, radius: number, angle: number): Coordinate => (
     [x + radius * Math.cos(angle), y + radius * Math.sin(angle)]
 )
 
-const getPointsNumber = (radius: number, full: boolean) => Math.floor(
+/*const getPointsNumber = (radius: number, full: boolean) => Math.floor(
     2 * (full ? Math.PI : SPREAD_ANGLE) * radius / BETWEEN_POINTS
-)
-
-const addCircle = (vectorSource: VectorSource, circle: Circle, parentCenter?: Coordinate) => {
-    const feature = new Feature({
-        geometry: circle
-    })
-    vectorSource.addFeature(feature)
-
-    return addPoints(vectorSource, feature.getGeometry()!, parentCenter)
-}
+)*/
 
 export {
     Source,

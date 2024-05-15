@@ -1,29 +1,32 @@
-const colors = {
-    scrub: new Uint8ClampedArray([200, 215, 171, 255]),
-    wood: new Uint8ClampedArray([173, 209, 158, 255]),
-    sand: new Uint8ClampedArray([245, 233, 198, 255]),
-    water: new Uint8ClampedArray([170, 211, 223, 255]),
+class Biom extends Uint8ClampedArray {
 }
 
-const areEquals = (left: Uint8ClampedArray, right: Uint8ClampedArray) => (
+const bioms = {
+    scrub: new Biom([200, 215, 171, 255]),
+    wood: new Biom([173, 209, 158, 255]),
+    sand: new Biom([245, 233, 198, 255]),
+    water: new Biom([170, 211, 223, 255]),
+}
+
+const areBiomsEquals = (left: Biom, right: Biom) => (
     left[0] === right[0] && left[1] === right[1] && left[2] === right[2] && left[3] === right[3]
 )
 
-const remapColorToSpeed = (color: Uint8ClampedArray) => {
+const remapColorToSpeed = (color: Biom) => {
     if (!color) {
         return null
     }
 
-    if (areEquals(color, colors.scrub)) {
+    if (areBiomsEquals(color, bioms.scrub)) {
         return 10
     }
-    if (areEquals(color, colors.wood)) {
+    if (areBiomsEquals(color, bioms.wood)) {
         return 5
     }
-    if (areEquals(color, colors.sand)) {
+    if (areBiomsEquals(color, bioms.sand)) {
         return 15
     }
-    if (areEquals(color, colors.water)) {
+    if (areBiomsEquals(color, bioms.water)) {
         return 0
     }
 
@@ -32,5 +35,7 @@ const remapColorToSpeed = (color: Uint8ClampedArray) => {
 
 export {
     remapColorToSpeed,
-    colors,
+    bioms,
+    Biom,
+    areBiomsEquals
 }

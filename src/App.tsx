@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useMemo, useRef, useState} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import './styles.css'
 import 'ol/ol.css'
 import Map from 'ol/Map'
@@ -25,33 +25,31 @@ function App(): ReactElement {
     const [vectorSource] = useState<VectorSource>(() => (vectorLayer.getSource()))
     const [osm] = useState(() => map.getLayers().item(0) as TileLayer<OSM>)
 
-    const mapCenter = useMemo(() => (
-        map.getView().getCenter() ?? [0, 0]
-    ), [map])
-
-    let incCircle: () => void;
+    const sources: Source[] = []
 
     const createSource = (center: Coordinate, parentCenter?: Coordinate) => {
-        return Source.create({
+        return new Source(
             vectorSource,
             center,
-            getData: (point: Coordinate) => {
+            (point: Coordinate) => {
                 return osm.getData(map.getPixelFromCoordinate(point)) as Uint8ClampedArray
             },
-            onAnotherBiomReached: (point: Coordinate) => {
-                incCircle = createSource(point, center)
+            (point: Coordinate) => {
+                sources.push(createSource(point, center))
             },
             parentCenter
-        })
+        )
     }
 
     map.on('click', e => {
-        incCircle = createSource(e.coordinate)
+        sources.push(createSource(e.coordinate))
 
-        for (let i = 0; i < 10000; ++i) {
+        for (let i = 0; i < 100; ++i) {
             setTimeout(() => {
-                incCircle()
-            }, i * 100)
+                sources.forEach(source => {
+                    source.increase()
+                })
+            }, i * 1000)
         }
     })
 
