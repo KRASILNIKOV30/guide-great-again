@@ -12,21 +12,21 @@ const areBiomsEquals = (left: Biom, right: Biom) => (
     left[0] === right[0] && left[1] === right[1] && left[2] === right[2] && left[3] === right[3]
 )
 
-const remapBiomToSpeed = (color: Biom) => {
-    if (!color) {
+const getBiomSpeed = (biom: Biom) => {
+    if (!biom) {
         return null
     }
 
-    if (areBiomsEquals(color, bioms.scrub)) {
+    if (areBiomsEquals(biom, bioms.scrub)) {
         return 4
     }
-    if (areBiomsEquals(color, bioms.wood)) {
+    if (areBiomsEquals(biom, bioms.wood)) {
         return 3
     }
-    if (areBiomsEquals(color, bioms.sand)) {
+    if (areBiomsEquals(biom, bioms.sand)) {
         return 3
     }
-    if (areBiomsEquals(color, bioms.water)) {
+    if (areBiomsEquals(biom, bioms.water)) {
         return 1
     }
 
@@ -34,7 +34,7 @@ const remapBiomToSpeed = (color: Biom) => {
 }
 
 export {
-    remapBiomToSpeed,
+    getBiomSpeed,
     bioms,
     Biom,
     areBiomsEquals

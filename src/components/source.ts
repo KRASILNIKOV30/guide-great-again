@@ -1,9 +1,14 @@
-import {Coordinate} from 'ol/coordinate';
-import VectorSource from 'ol/source/Vector';
-import {Feature} from 'ol';
-import {Circle, Point} from 'ol/geom';
-import {areBiomsEquals, Biom, remapBiomToSpeed} from "../core/remap";
-import {forEachReverse} from "../core/forEachReverse";
+import {Coordinate} from 'ol/coordinate'
+import VectorSource from 'ol/source/Vector'
+import {Feature} from 'ol'
+import {Circle, Point} from 'ol/geom'
+import {
+    areBiomsEquals,
+    Biom,
+    getBiomSpeed,
+} from '../core/remap'
+import {forEachReverse} from '../core/forEachReverse'
+
 
 const BETWEEN_POINTS = 10
 const DRAWING_ENABLED = true
@@ -12,31 +17,39 @@ const DEFAULT_SPEED = 10
 
 class Source {
     circle: Circle
+    destination: Point
     parentCenter?: Coordinate
     vectorSource: VectorSource
-    getData: (point: Coordinate) => Biom
+    getBiom: (point: Coordinate) => Biom
     onAnotherBiomReached: (point: Coordinate) => void
+    onFinish: () => void
     points: Point[] = []
-    biom: Biom;
+    biom: Biom
     speed: number
-    parentBiom: Biom | null;
+    parentBiom: Biom | null
+    initial = false
 
     constructor(
         vectorSource: VectorSource,
         center: Coordinate,
-        getData: (point: Coordinate) => Uint8ClampedArray,
+        destination: Coordinate,
+        getBiom: (point: Coordinate) => Uint8ClampedArray,
         onAnotherBiomReached: (point: Coordinate) => void,
+        onFinish: () => void,
         parentCenter?: Coordinate
     ) {
-        this.getData = getData
+        this.getBiom = getBiom
         this.parentCenter = parentCenter
         this.vectorSource = vectorSource
         this.onAnotherBiomReached = onAnotherBiomReached
+        this.onFinish = onFinish
         this.circle = this.createCircle(center)
+        this.destination = new Point(destination)
         this.points = this.addPoints()
-        this.biom = this.getData(this.circle.getCenter())
-        this.speed = remapBiomToSpeed(this.biom) ?? DEFAULT_SPEED
-        this.parentBiom = parentCenter ? getData(parentCenter) : null
+        this.biom = this.getBiom(this.circle.getCenter())
+        this.speed = getBiomSpeed(this.biom) ?? DEFAULT_SPEED
+        this.parentBiom = parentCenter ? getBiom(parentCenter) : null
+        this.initial = !parentCenter
     }
 
     createCircle(center: Coordinate) {
@@ -50,36 +63,44 @@ class Source {
     }
 
     addPoints() {
-        const pointsNumber = !!this.parentCenter ? 5 : 10
+        const pointsNumber = !!this.parentCenter ? 3 : 3
 
         const [start, end] = this.parentCenter
             ? getAngleToSpread(this.parentCenter, this.circle.getCenter())
             : [0, 2 * Math.PI]
 
         return Array.from(Array(pointsNumber).keys()).map(i => {
-            const point = new Point(getPoint(this.circle.getCenter(), this.circle.getRadius() + 1, getAngle(start, end, i, pointsNumber)))
+            const point = new Point(getPoint(
+                this.circle.getCenter(),
+                this.circle.getRadius() + 1,
+                getAngle(start, end, i, pointsNumber),
+            ))
             if (DRAWING_ENABLED) {
-                this.vectorSource.addFeature(
-                    new Feature({
-                        geometry: point
-                    })
-                )
+                this.drawPoint(point)
             }
+
             return point
         })
+    }
+
+    drawPoint(point: Point) {
+        this.vectorSource.addFeature(new Feature(point))
     }
 
     increase() {
         this.circle.setRadius(this.circle.getRadius() + this.speed)
         this.points.forEach(point => movePoint(point, this.circle.getCenter(), this.speed))
-        if (this.parentCenter) {
+        if (this.shouldCheckBounds()) {
             this.checkBounds()
         }
 
-        forEachReverse(this.points, (point, i, points) => {
+        forEachReverse(this.points, this.initial, (point, i, points) => {
+            if (this.isDestinationReached()) {
+                this.onFinish()
+            }
             const coords = point.getCoordinates()
-            const biom = this.getData(coords)
-            if (remapBiomToSpeed(biom) !== null && !areBiomsEquals(this.getData(coords), this.biom)) {
+            const biom = this.getBiom(coords)
+            if (this.isAnotherBiomReached(biom)) {
                 if (!this.isPointReached(point)) {
                     this.onAnotherBiomReached(coords)
                 }
@@ -88,45 +109,69 @@ class Source {
         })
     }
 
+    isAnotherBiomReached = (biom: Biom) => getBiomSpeed(biom) !== null && !areBiomsEquals(biom, this.biom)
+
+    shouldCheckBounds = () => !!this.parentCenter && this.getCircumference() > BETWEEN_POINTS * 4
+
+    getCircumference = () => 2 * Math.PI * this.circle.getRadius()
+
     checkBounds() {
-        this.checkPoint(this.points[0], false)
-        this.checkPoint(this.points[this.points.length - 1], true)
+        this.checkExtremePoint(true)
+        this.checkExtremePoint(false)
     }
 
-    remove(last: boolean) {
-        if (last) {
-            this.points.pop()
-        } else {
-            this.points.shift()
-        }
-    }
+    checkExtremePoint(first: boolean) {
+        const point = this.getExtremePoint(first)
+        const neighbour = this.getNeighbour(first)
 
-    add(point: Point, last: boolean) {
-        if (last) {
-            this.points.push(point)
-        } else {
-            this.points.unshift(point)
-        }
-    }
-
-    checkPoint(point: Point, last: boolean) {
-        if (!areBiomsEquals(this.getData(point.getCoordinates()), this.biom)) {
-            this.remove(last)
-            return
+        if (this.isInParentBiom(point)) {
+            if (this.isInParentBiom(neighbour)) {
+                this.removeExtremePoint(first)
+            }
+            return;
         }
 
-        const neighbour = last
-            ? nextPoint(this.circle.getRadius(), this.circle.getCenter(), point.getCoordinates())
-            : prevPoint(this.circle.getRadius(), this.circle.getCenter(), point.getCoordinates())
-
-        const newPoint = new Point(neighbour)
-        this.add(newPoint, last)
-        this.checkPoint(newPoint, last)
+        const newPoint = this.createNeighbour(first)
+        this.drawPoint(newPoint)
+        this.addExtremePoint(newPoint, first)
+        this.checkExtremePoint(first)
     }
+
+    getLastPoint = () => this.points[this.points.length - 1]
+    getFirstPoint = () => this.points[0]
+
+    removeExtremePoint = (first: boolean) => first
+        ? this.points.shift()
+        : this.points.pop()
+
+    addExtremePoint = (point: Point, first: boolean) => first
+        ? this.points.unshift(point)
+        : this.points.push(point)
+
+    getExtremePoint = (first: boolean) => first
+        ? this.getFirstPoint()
+        : this.getLastPoint()
 
     isPointReached(point: Point): boolean {
         return this.vectorSource.getFeaturesAtCoordinate(point.getCoordinates()).length > 1
     }
+
+    createNeighbour = (first: boolean) => new Point(first
+        ? prevPoint(this.circle.getRadius(), this.circle.getCenter(), this.getFirstPoint().getCoordinates())
+        : nextPoint(this.circle.getRadius(), this.circle.getCenter(), this.getLastPoint().getCoordinates())
+    )
+
+    getNeighbour = (first: boolean) => first
+        ? this.points[1]
+        : this.points[this.points.length - 2]
+
+    isInParentBiom = (point: Point) => this.parentBiom && this.isInBiom(point, this.parentBiom)
+
+    isInBiom = (point: Point, biom: Biom) => (
+        areBiomsEquals(this.getBiom(point.getCoordinates()), biom)
+    )
+
+    isDestinationReached = () => this.isPointReached(this.destination)
 }
 
 const movePoint = (point: Point, center: Coordinate, speed: number) => {
