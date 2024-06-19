@@ -1,27 +1,26 @@
 import {Coordinate} from 'ol/coordinate'
 import VectorSource from 'ol/source/Vector'
 import {Feature} from 'ol'
-import {Circle, Point} from 'ol/geom'
-import {
-    areBiomsEquals,
-    Biom,
-    getBiomSpeed,
-} from '../core/remap'
+import {Circle, LineString, Point} from 'ol/geom'
+import {areBiomsEquals, Biom, getBiomSpeed,} from '../core/remap'
 import {forEachReverse} from '../core/forEachReverse'
 
 
 const BETWEEN_POINTS = 10
-const DRAWING_ENABLED = true
+const DRAWING_ENABLED = false
 const SPREAD_ANGLE = Math.PI / 3
 const DEFAULT_SPEED = 10
+const POINTS_NUMBER = 10
+const START_RADIUS = 3
 
 class Source {
     circle: Circle
     destination: Point
+    parent?: Source
     parentCenter?: Coordinate
     vectorSource: VectorSource
     getBiom: (point: Coordinate) => Biom
-    onAnotherBiomReached: (point: Coordinate) => void
+    onAnotherBiomReached: (point: Coordinate, source: Source) => void
     onFinish: () => void
     points: Point[] = []
     biom: Biom
@@ -34,11 +33,13 @@ class Source {
         center: Coordinate,
         destination: Coordinate,
         getBiom: (point: Coordinate) => Uint8ClampedArray,
-        onAnotherBiomReached: (point: Coordinate) => void,
+        onAnotherBiomReached: (point: Coordinate, source: Source) => void,
         onFinish: () => void,
-        parentCenter?: Coordinate
+        parentCenter?: Coordinate,
+        parent?: Source
     ) {
         this.getBiom = getBiom
+        this.parent = parent
         this.parentCenter = parentCenter
         this.vectorSource = vectorSource
         this.onAnotherBiomReached = onAnotherBiomReached
@@ -54,7 +55,7 @@ class Source {
 
     createCircle(center: Coordinate) {
         const feature = new Feature({
-            geometry: new Circle(center, 1)
+            geometry: new Circle(center, START_RADIUS)
         })
 
         this.vectorSource.addFeature(feature)
@@ -63,7 +64,7 @@ class Source {
     }
 
     addPoints() {
-        const pointsNumber = !!this.parentCenter ? 3 : 3
+        const pointsNumber = POINTS_NUMBER
 
         const [start, end] = this.parentCenter
             ? getAngleToSpread(this.parentCenter, this.circle.getCenter())
@@ -88,6 +89,9 @@ class Source {
     }
 
     increase() {
+        if (!this.points.length) {
+            return
+        }
         this.circle.setRadius(this.circle.getRadius() + this.speed)
         this.points.forEach(point => movePoint(point, this.circle.getCenter(), this.speed))
         if (this.shouldCheckBounds()) {
@@ -97,12 +101,13 @@ class Source {
         forEachReverse(this.points, this.initial, (point, i, points) => {
             if (this.isDestinationReached()) {
                 this.onFinish()
+                this.drawRoute(this.destination)
             }
             const coords = point.getCoordinates()
             const biom = this.getBiom(coords)
             if (this.isAnotherBiomReached(biom)) {
                 if (!this.isPointReached(point)) {
-                    this.onAnotherBiomReached(coords)
+                    this.onAnotherBiomReached(coords, this)
                 }
                 points.splice(i, 1)
             }
@@ -124,6 +129,10 @@ class Source {
         const point = this.getExtremePoint(first)
         const neighbour = this.getNeighbour(first)
 
+        if (!point || !neighbour) {
+            return
+        }
+
         if (this.isInParentBiom(point)) {
             if (this.isInParentBiom(neighbour)) {
                 this.removeExtremePoint(first)
@@ -132,9 +141,11 @@ class Source {
         }
 
         const newPoint = this.createNeighbour(first)
-        this.drawPoint(newPoint)
+        if (DRAWING_ENABLED) {
+            this.drawPoint(newPoint)
+        }
         this.addExtremePoint(newPoint, first)
-        this.checkExtremePoint(first)
+        //this.checkExtremePoint(first)
     }
 
     getLastPoint = () => this.points[this.points.length - 1]
@@ -172,6 +183,18 @@ class Source {
     )
 
     isDestinationReached = () => this.isPointReached(this.destination)
+
+    drawRoute = (point: Point) => {
+        const center = this.circle.getCenter()
+        const line = new LineString([
+            point.getCoordinates(),
+            center,
+        ])
+        this.vectorSource.addFeature(new Feature(line))
+        if (this.parent) {
+            this.parent.drawRoute(new Point(center))
+        }
+    }
 }
 
 const movePoint = (point: Point, center: Coordinate, speed: number) => {

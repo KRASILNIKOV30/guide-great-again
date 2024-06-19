@@ -4,7 +4,9 @@ function forEachReverse<T>(arr: T[], withBounds: boolean, callback: (el: T, i: n
         : [arr.length - 2, 1]
 
     for (let i = rbegin; i !== rend; --i) {
-        callback(arr[i], i, arr)
+        if (arr[i]) {
+            callback(arr[i], i, arr)
+        }
     }
 }
 
