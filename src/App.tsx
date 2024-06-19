@@ -34,7 +34,7 @@ function App(): ReactElement {
 
     const onFinish = () => sources.splice(0, sources.length)
 
-    const createSource = (center: Coordinate, parentCenter?: Coordinate) => {
+    const createSource = (center: Coordinate, parentCenter?: Coordinate, parent?: Source) => {
         return new Source(
             vectorSource,
             center,
@@ -42,22 +42,23 @@ function App(): ReactElement {
             (point: Coordinate) => {
                 return osm.getData(map.getPixelFromCoordinate(point)) as Uint8ClampedArray
             },
-            (point: Coordinate) => {
-                sources.push(createSource(point, center))
+            (point: Coordinate, source: Source) => {
+                sources.push(createSource(point, center, source))
             },
             onFinish,
             parentCenter,
+            parent,
         )
     }
 
     map.on('click', e => sources.push(createSource(e.coordinate)))
 
-    for (let i = 0; i < 100; ++i) {
+    for (let i = 0; i < 10000; ++i) {
         setTimeout(() => {
             sources.forEach(source => {
                 source.increase()
             })
-        }, i * 500)
+        }, i * 100)
     }
 
     useEffect(() => {
