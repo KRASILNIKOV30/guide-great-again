@@ -1,12 +1,9 @@
-function forEachReverse<T>(arr: T[], withBounds: boolean, callback: (el: T, i: number, arr: T[]) => void) {
-    const [rbegin, rend] = withBounds
-        ? [arr.length - 1, 0]
-        : [arr.length - 2, 1]
+function forEachReverse<T>(arr: T[], callback: (el: T, i: number, arr: T[]) => void) {
+    const length = arr.length
+    const [rbegin, rend] = [length - 1, -1]
 
     for (let i = rbegin; i !== rend; --i) {
-        if (arr[i]) {
-            callback(arr[i], i, arr)
-        }
+        callback(arr[i], i, arr)
     }
 }
 

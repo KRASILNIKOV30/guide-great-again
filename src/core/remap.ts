@@ -9,7 +9,6 @@ const bioms = {
 }
 
 const areBiomsEquals = (left: Biom, right: Biom) => (
-    left && right &&
     left[0] === right[0] && left[1] === right[1] && left[2] === right[2] && left[3] === right[3]
 )
 
@@ -19,13 +18,13 @@ const getBiomSpeed = (biom: Biom) => {
     }
 
     if (areBiomsEquals(biom, bioms.scrub)) {
-        return 10
+        return 7
     }
     if (areBiomsEquals(biom, bioms.wood)) {
-        return 6
+        return 5
     }
     if (areBiomsEquals(biom, bioms.sand)) {
-        return 3
+        return 10
     }
     if (areBiomsEquals(biom, bioms.water)) {
         return 0

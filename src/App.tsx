@@ -53,12 +53,12 @@ function App(): ReactElement {
 
     map.on('click', e => sources.push(createSource(e.coordinate)))
 
-    for (let i = 0; i < 10000; ++i) {
+    for (let i = 0; i < 1000000; ++i) {
         setTimeout(() => {
             sources.forEach(source => {
                 source.increase()
             })
-        }, i * 100)
+        }, i)
     }
 
     useEffect(() => {
@@ -67,6 +67,12 @@ function App(): ReactElement {
             map.updateSize()
         }
     }, [map])
+
+    /*for (let i = 0; i < 10000; ++i) {
+        sources.forEach(source => {
+            source.increase()
+        })
+    }*/
 
     return (
         <div className="App">
