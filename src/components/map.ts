@@ -11,7 +11,9 @@ const map = new Map({
     layers: [
         new TileLayer({
             visible: true,
-            source: new OSM(),
+            source: new OSM({
+                cacheSize: 10000000,
+            }),
         }),
         new VectorLayer({
             source: new Vector()
@@ -19,7 +21,7 @@ const map = new Map({
     ],
     view: new View({
         center: [5304435.777900918, 7603452.921222763],
-        zoom: 18,
+        zoom: 12,
     }),
     controls: defaultControls(),
     interactions: defaultInteractions({})

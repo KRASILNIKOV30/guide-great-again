@@ -1,7 +1,7 @@
 import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import './styles.css'
 import 'ol/ol.css'
-import Map from 'ol/Map'
+import olMap from 'ol/Map'
 import {map} from './components/map'
 import VectorLayer from 'ol/layer/Vector'
 import VectorSource from "ol/source/Vector";
@@ -9,11 +9,12 @@ import {Source} from "./components/source";
 import TileLayer from "ol/layer/Tile";
 import {OSM} from "ol/source";
 import {Coordinate} from "ol/coordinate";
-import {Point} from "ol/geom";
-import {Feature} from "ol";
+import {LineString} from "ol/geom";
+import {getUid} from 'ol/util';
+import {getLength} from "ol/sphere";
 
-export function useMap(): Map {
-    const mapRef = useRef<Map>()
+export function useMap(): olMap {
+    const mapRef = useRef<olMap>()
     if (!mapRef.current) {
         mapRef.current = map
     }
@@ -26,24 +27,26 @@ function App(): ReactElement {
     const [vectorLayer] = useState<VectorLayer<any>>(() => map.getLayers().item(1) as VectorLayer<any>)
     const [vectorSource] = useState<VectorSource>(() => (vectorLayer.getSource()))
     const [osm] = useState(() => map.getLayers().item(0) as TileLayer<OSM>)
-
-    const sources: Source[] = []
-
+    const sources = new Map<string, Source>([])
     const destination: Coordinate = [5304434.782384094, 7603452.257958593]
-    vectorSource.addFeature(new Feature(new Point(destination)))
 
-    const onFinish = () => sources.splice(0, sources.length)
+    const onFinish = () => {
+        sources.clear()
+    }
 
-    const createSource = (center: Coordinate, parentCenter?: Coordinate, parent?: Source) => {
+    const createSource = (distance: number, center: Coordinate, parentCenter?: Coordinate, parent?: Source) => {
         return new Source(
+            distance,
             vectorSource,
             center,
             destination,
             (point: Coordinate) => {
                 return osm.getData(map.getPixelFromCoordinate(point)) as Uint8ClampedArray
             },
-            (point: Coordinate, source: Source) => {
-                sources.push(createSource(point, center, source))
+            (distance: number, point: Coordinate, source: Source) => {
+                sources.delete(getUid(source))
+                const newSource = createSource(distance, point, center, source)
+                sources.set(getUid(newSource), newSource)
             },
             onFinish,
             parentCenter,
@@ -51,15 +54,18 @@ function App(): ReactElement {
         )
     }
 
-    map.on('click', e => sources.push(createSource(e.coordinate)))
-
-    for (let i = 0; i < 1000000; ++i) {
-        setTimeout(() => {
-            sources.forEach(source => {
-                source.increase()
-            })
-        }, i)
-    }
+    map.on('click', async e => {
+       const distance = getLength(new LineString([destination, e.coordinate]))
+        const newSource = createSource(distance, e.coordinate)
+        sources.set(getUid(newSource), newSource)
+        for (let i = 0; i < 10000; i++) {
+            setTimeout(async () => {
+                for (const [, source] of sources) {
+                    await source.increase();
+                }
+            }, i)
+        }
+    })
 
     useEffect(() => {
         if (mapRef.current) {
@@ -67,12 +73,6 @@ function App(): ReactElement {
             map.updateSize()
         }
     }, [map])
-
-    /*for (let i = 0; i < 10000; ++i) {
-        sources.forEach(source => {
-            source.increase()
-        })
-    }*/
 
     return (
         <div className="App">

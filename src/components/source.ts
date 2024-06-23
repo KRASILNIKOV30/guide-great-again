@@ -3,42 +3,47 @@ import VectorSource from 'ol/source/Vector'
 import {Feature} from 'ol'
 import {Circle, LineString, Point} from 'ol/geom'
 import {areBiomsEquals, Biom, getBiomSpeed,} from '../core/remap'
-import {forEachReverse} from '../core/forEachReverse'
+import {forEachCount, forEachReverse} from '../core/forEachReverse'
+import {getLength} from "ol/sphere";
 
-
+const DEFAULT_SPEED = 5
 const BETWEEN_POINTS = 20
 const DRAWING_ENABLED = false
-const SPREAD_ANGLE = Math.PI / 2
-const DEFAULT_SPEED = 10
+const SPREAD_ANGLE = Math.PI / 3
 const POINTS_NUMBER = 5
-const START_RADIUS = 20
+const START_RADIUS = 0
 
 class Source {
+    distance: number
+    coef: number
     circle: Circle
     destination: Point
     parent?: Source
     parentCenter?: Coordinate
     vectorSource: VectorSource
     getBiom: (point: Coordinate) => Biom
-    onAnotherBiomReached: (point: Coordinate, source: Source) => void
+    onAnotherBiomReached: (distance: number, point: Coordinate, source: Source) => void
     onFinish: () => void
     points: Feature<Point>[] = []
     biom: Biom
     speed: number
     parentBiom: Biom | null
     initial = false
-    extremePointsNumber = 0
+    increasesNumber = 0
 
     constructor(
+        distance: number,
         vectorSource: VectorSource,
         center: Coordinate,
         destination: Coordinate,
         getBiom: (point: Coordinate) => Uint8ClampedArray,
-        onAnotherBiomReached: (point: Coordinate, source: Source) => void,
+        onAnotherBiomReached: (distance: number, point: Coordinate, source: Source) => void,
         onFinish: () => void,
         parentCenter?: Coordinate,
         parent?: Source
     ) {
+        this.distance = distance
+        this.coef = distance / 200
         this.getBiom = getBiom
         this.parent = parent
         this.parentCenter = parentCenter
@@ -49,7 +54,7 @@ class Source {
         this.destination = new Point(destination)
         this.points = this.buildPoints()
         this.biom = this.getBiom(this.circle.getCenter())
-        this.speed = getBiomSpeed(this.biom) ?? DEFAULT_SPEED
+        this.speed = getBiomSpeed(this.biom) || DEFAULT_SPEED * this.coef
         this.parentBiom = parentCenter ? getBiom(parentCenter) : null
         this.initial = !parentCenter
     }
@@ -72,9 +77,7 @@ class Source {
     }
 
     buildPoints() {
-        this.deleteAll()
-
-        const pointsNumber = this.getPointsNumber()
+        const pointsNumber = !this.parentCenter ? 2 * POINTS_NUMBER : POINTS_NUMBER
 
         const [start, end] = this.parentCenter
             ? getAngleToSpread(this.parentCenter, this.circle.getCenter())
@@ -98,129 +101,85 @@ class Source {
         this.vectorSource.addFeature(point)
     }
 
-    shouldIncreasePointsNumber = () => {
-        return this.getCircumference() / this.points.length > 2 * BETWEEN_POINTS
-    }
+    increase = () => new Promise((resolve) => {
+        this.increasesNumber++
 
-    increase() {
         if (!this.points.length) {
+            resolve(undefined)
             return
         }
-
-        /*if (this.shouldIncreasePointsNumber()) {
-            this.points.forEach(point => {
-                const newPoint = new Feature(new Point(nextPoint(
-                    this.circle.getRadius(),
-                    this.circle.getCenter(),
-                    point.getGeometry()!.getCoordinates(),
-                )))
-                this.points.push(newPoint)
-                if (DRAWING_ENABLED) {
-                    this.drawPoint(newPoint)
-                }
-            })
-        }*/
 
         this.circle.setRadius(this.circle.getRadius() + this.speed)
 
         this.points.forEach(point => movePoint(point.getGeometry()!, this.circle.getCenter(), this.speed))
-        /*if (this.shouldCheckBounds()) {
-            this.checkBounds()
-        }*/
 
-        forEachReverse(this.points, (pointFeature, i, points) => {
+        if (this.increasesNumber < 5) {
+            resolve(undefined)
+            return
+        }
+
+        forEachReverse(this.points, (pointFeature, i) => {
             const point = pointFeature.getGeometry()!
             if (this.isDestinationReached()) {
                 this.onFinish()
+                this.vectorSource.clear()
                 this.drawRoute(this.destination)
+                this.deleteAll()
+                return false
             }
             const coords = point.getCoordinates()
             const biom = this.getBiom(coords)
             if (this.isAnotherBiomReached(biom)) {
                 if (!this.isPointReached(point) && getBiomSpeed(biom) !== 0) {
-                    this.onAnotherBiomReached(coords, this)
+                    this.onAnotherBiomReached(this.distance, coords, this)
                 }
                 this.points.splice(i, 1)
+                this.anotherBiomReached()
+                return false
+            }
+            return true
+        })
+        resolve(undefined)
+    })
+
+    anotherBiomReached = () => {
+        forEachCount(this.points, 4, pointFeature => {
+            const point = pointFeature.getGeometry()!
+            const coords = point.getCoordinates()
+            const biom = this.getBiom(coords)
+
+            if (!this.isPointReached(point) && biom && getBiomSpeed(biom) !== 0) {
+                this.onAnotherBiomReached(this.distance, coords, this)
             }
         })
+        this.deleteAll()
     }
 
-    isAnotherBiomReached = (biom: Biom) => biom && getBiomSpeed(biom) !== null && !areBiomsEquals(biom, this.biom)
-
-    shouldCheckBounds = () => !!this.parentCenter && this.getCircumference() > BETWEEN_POINTS * 4
+    isAnotherBiomReached = (biom: Biom) =>
+        biom
+        && this.biom
+        && getBiomSpeed(biom) !== null
+        && !areBiomsEquals(biom, this.biom)
 
     getCircumference = () => 2 * Math.PI * this.circle.getRadius()
-
-    checkBounds() {
-        this.checkExtremePoint(true)
-        this.checkExtremePoint(false)
-    }
-
-    checkExtremePoint(first: boolean) {
-        const point = this.getExtremePoint(first)
-        const neighbour = this.getNeighbour(first)
-
-        if (!point || !neighbour) {
-            return
-        }
-
-        if (this.isInParentBiom(point)) {
-            if (this.isInParentBiom(neighbour)) {
-                this.removeExtremePoint(first)
-            }
-            return;
-        }
-
-        if (this.extremePointsNumber < POINTS_NUMBER) {
-            this.createExtremePoint(first)
-        }
-    }
-
-    createExtremePoint(first: boolean) {
-        ++this.extremePointsNumber
-        const newPoint = this.createNeighbour(first)
-        if (DRAWING_ENABLED) {
-            this.drawPoint(newPoint)
-        }
-        this.addExtremePoint(newPoint, first)
-        this.checkExtremePoint(first)
-    }
-
-    getLastPoint = () => this.points[this.points.length - 1].getGeometry()!
-    getFirstPoint = () => this.points[0].getGeometry()!
-
-    removeExtremePoint = (first: boolean) => first
-        ? this.points.shift()
-        : this.points.pop()
-
-    addExtremePoint = (point: Feature<Point>, first: boolean) => first
-        ? this.points.unshift(point)
-        : this.points.push(point)
-
-    getExtremePoint = (first: boolean) => first
-        ? this.getFirstPoint()
-        : this.getLastPoint()
 
     isPointReached(point: Point): boolean {
         return this.vectorSource.getFeaturesAtCoordinate(point.getCoordinates()).length > 1
     }
 
-    createNeighbour = (first: boolean) => new Feature(new Point(first
-        ? prevPoint(this.circle.getRadius(), this.circle.getCenter(), this.getFirstPoint().getCoordinates())
-        : nextPoint(this.circle.getRadius(), this.circle.getCenter(), this.getLastPoint().getCoordinates())
-    ))
+    isDestinationReached = () => {
+        const destination = this.destination.getCoordinates()
+        const distFromCenter = getLength(new LineString([this.circle.getCenter(), destination]))
+        if (distFromCenter > this.circle.getRadius() * 1.1) {
+            return false
+        }
+        const closestPoint = this.vectorSource.getClosestFeatureToCoordinate(this.destination.getCoordinates(), feature => (
+            feature.getGeometry() instanceof Point
+        )) as Feature<Point>
+        const length = getLength(new LineString([this.destination.getCoordinates(), closestPoint.getGeometry()!.getCoordinates()]))
 
-    getNeighbour = (first: boolean) => first
-        ? this.points[1].getGeometry()!
-        : this.points[this.points.length - 2].getGeometry()!
-
-    isInParentBiom = (point: Point) => this.parentBiom && this.isInBiom(point, this.parentBiom)
-
-    isInBiom = (point: Point, biom: Biom) => (
-        areBiomsEquals(this.getBiom(point.getCoordinates()), biom)
-    )
-
-    isDestinationReached = () => this.isPointReached(this.destination)
+        return length < 10 * this.coef
+    }
 
     drawRoute = (point: Point) => {
         const center = this.circle.getCenter()
@@ -261,18 +220,6 @@ const calcAngle = ([x1, y1]: Coordinate, [x2, y2]: Coordinate) => (
 const getPoint = ([x, y]: Coordinate, radius: number, angle: number): Coordinate => (
     [x + radius * Math.cos(angle), y + radius * Math.sin(angle)]
 )
-
-const nextPoint = (radius: number, center: Coordinate, point: Coordinate) => (
-    getPoint(center, radius, calcAngle(center, point) + BETWEEN_POINTS / radius)
-)
-
-const prevPoint = (radius: number, center: Coordinate, point: Coordinate) => (
-    getPoint(center, radius, calcAngle(center, point) - BETWEEN_POINTS / radius)
-)
-
-/*const getPointsNumber = (radius: number, full?: boolean) => Math.floor(
-    2 * Math.PI * radius / BETWEEN_POINTS
-)*/
 
 export {
     Source,
