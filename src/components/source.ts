@@ -171,6 +171,9 @@ class Source {
         const closestPoint = this.vectorSource.getClosestFeatureToCoordinate(this.destination.getCoordinates(), feature => (
             feature.getGeometry() instanceof Point && this.points.includes(feature as Feature<Point>)
         )) as Feature<Point>
+        if (!closestPoint?.getGeometry()) {
+            return false
+        }
         const length = getLength(new LineString([this.destination.getCoordinates(), closestPoint.getGeometry()!.getCoordinates()]))
 
         return length < 10 * this.coef

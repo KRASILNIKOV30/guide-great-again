@@ -21,7 +21,7 @@ const map = new Map({
     ],
     view: new View({
         center: [5304435.777900918, 7603452.921222763],
-        zoom: 12,
+        zoom: 15,
     }),
     controls: defaultControls(),
     interactions: defaultInteractions({})
