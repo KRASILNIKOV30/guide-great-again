@@ -1,0 +1,29 @@
+.selector__container {
+  text-align: left;
+  padding-left: 37px;
+}
+
+.selector__header {
+  font-size: 20px;
+  margin-top: 60px;
+  margin-bottom: 10px;
+}
+
+.selector__select {
+  background-color: transparent;
+  height: 35px;
+  padding-inline: 0 10px;
+  margin: 0;
+  width: 200px;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  line-height: inherit;
+  outline: none;
+  border: none;
+  border-bottom: 2px solid gray;
+}
+
+.selector__select::-ms-expand {
+  display: none;
+}

@@ -16,6 +16,7 @@ const Sidebar = ({
     onSandChange,
 }: SidebarProps) => (
     <div className="sidebar__container">
+        <h1 className="sidebar__header">Параметры проходимости</h1>
         <Selector
             title="Вода"
             onChange={onWaterChange}

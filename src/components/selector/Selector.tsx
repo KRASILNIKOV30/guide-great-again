@@ -1,3 +1,4 @@
+import './Selector.css'
 import React, {RefObject, useEffect, useRef, useState} from 'react'
 
 type SelectorProps = {
@@ -21,7 +22,12 @@ function Selector({
     return (
         <div className="selector__container">
             <h1 className="selector__header">{title}</h1>
-            <select value={value} ref={ref} onChange={() => {}}>
+            <select
+                className="selector__select"
+                value={value}
+                ref={ref}
+                onChange={() => {}}
+            >
                 <option value={0}>Не проходимо</option>
                 <option value={5}>Тяжело проходимо</option>
                 <option value={10}>Проходимо</option>
