@@ -7,7 +7,6 @@ import {forEachCount, forEachReverse} from '../core/forEachReverse'
 import {getLength} from "ol/sphere";
 
 const DEFAULT_SPEED = 5
-const BETWEEN_POINTS = 20
 const DRAWING_ENABLED = true
 const SPREAD_ANGLE = Math.PI / 3
 const POINTS_NUMBER = 5
@@ -69,8 +68,6 @@ class Source {
         return feature.getGeometry()!
     }
 
-    getPointsNumber = () => Math.floor(this.getCircumference() / BETWEEN_POINTS)
-
     deleteAll = () => {
         this.points.forEach(point => this.vectorSource.removeFeature(point))
         this.points.splice(0, this.points.length)
@@ -113,7 +110,7 @@ class Source {
 
         this.points.forEach(point => movePoint(point.getGeometry()!, this.circle.getCenter(), this.speed))
 
-        if (this.increasesNumber < 5) {
+        if (this.increasesNumber < 3) {
             resolve(undefined)
             return
         }
