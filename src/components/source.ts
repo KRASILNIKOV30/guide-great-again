@@ -8,7 +8,7 @@ import {getLength} from "ol/sphere";
 
 const DEFAULT_SPEED = 5
 const BETWEEN_POINTS = 20
-const DRAWING_ENABLED = false
+const DRAWING_ENABLED = true
 const SPREAD_ANGLE = Math.PI / 3
 const POINTS_NUMBER = 5
 const START_RADIUS = 0
