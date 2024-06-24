@@ -78,7 +78,7 @@ class Source {
 
         const [start, end] = this.parentCenter
             ? getAngleToSpread(this.parentCenter, this.circle.getCenter())
-            : [0, 2 * Math.PI]
+            : getAngleToSpread(this.circle.getCenter(), this.destination.getCoordinates())
 
         return Array.from(Array(pointsNumber).keys()).map(i => {
             const point = new Feature(new Point(getPoint(
@@ -158,8 +158,6 @@ class Source {
         && getBiomSpeed(biom) !== null
         && !areBiomsEquals(biom, this.biom)
 
-    getCircumference = () => 2 * Math.PI * this.circle.getRadius()
-
     isPointReached(point: Point): boolean {
         return this.vectorSource.getFeaturesAtCoordinate(point.getCoordinates()).length > 1
     }
@@ -167,11 +165,11 @@ class Source {
     isDestinationReached = () => {
         const destination = this.destination.getCoordinates()
         const distFromCenter = getLength(new LineString([this.circle.getCenter(), destination]))
-        if (distFromCenter > this.circle.getRadius() * 1.1) {
+        if (distFromCenter > this.circle.getRadius() * 1.05) {
             return false
         }
         const closestPoint = this.vectorSource.getClosestFeatureToCoordinate(this.destination.getCoordinates(), feature => (
-            feature.getGeometry() instanceof Point
+            feature.getGeometry() instanceof Point && this.points.includes(feature as Feature<Point>)
         )) as Feature<Point>
         const length = getLength(new LineString([this.destination.getCoordinates(), closestPoint.getGeometry()!.getCoordinates()]))
 

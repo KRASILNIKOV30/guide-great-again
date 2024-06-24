@@ -65,7 +65,7 @@ function App(): ReactElement {
                 for (const [, source] of sources) {
                     await source.increase();
                 }
-            }, 200 * i)
+            }, i)
         }
     })
 
