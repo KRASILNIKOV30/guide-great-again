@@ -12,6 +12,8 @@ import {Coordinate} from "ol/coordinate";
 import {LineString} from "ol/geom";
 import {getUid} from 'ol/util';
 import {getLength} from "ol/sphere";
+import {Sidebar} from "./components/sidebar/Sidebar";
+import {setBiomSpeed} from "./core/remap";
 
 export function useMap(): olMap {
     const mapRef = useRef<olMap>()
@@ -79,6 +81,12 @@ function App(): ReactElement {
             <div className="map-container">
                 <div id="map" ref={mapRef}></div>
             </div>
+            <Sidebar
+                onWaterChange={(n) => {setBiomSpeed('water', n)}}
+                onForestChange={(n) => {setBiomSpeed('forest', n)}}
+                onScrubChange={(n) => {setBiomSpeed('scrub', n)}}
+                onSandChange={(n) => {setBiomSpeed('sand', n)}}
+            />
         </div>
     )
 }

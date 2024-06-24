@@ -35,9 +35,14 @@ const getBiomSpeed = (value: Biom) => {
     return null
 }
 
+const setBiomSpeed = (biom: string, speed: number) => (
+    bioms[biom][1] = speed
+)
+
 export {
     getBiomSpeed,
     bioms,
     Biom,
-    areBiomsEquals
+    areBiomsEquals,
+    setBiomSpeed
 }
